@@ -10,21 +10,20 @@ from DB.engine import ORMDatabase
 from DB.Models.DB_Models.auth_models import Users, RefreshToken, AccessToken
 
 
-url = str(URL.create(
+url = URL.create(
         drivername="postgresql+asyncpg",
         username="postgres",
         password="postgres",
         host="localhost",
         port=5432,
-        database="Pizza"
-    ))
-
+        database="Pizza",
+    )
 
 #Создание таблиц через драйвер engine
 async def init_models():
     url_db = url
-    print(url_db)
-    engine = ORMDatabase("postgresql+asyncpg://postgres:postgres@localhost:5432/Pizza")
+
+    engine = ORMDatabase(url_db)
     async with engine.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
+        print(url_db)

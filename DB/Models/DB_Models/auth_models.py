@@ -18,7 +18,7 @@ class Users(Base):
     password: Mapped[str] = mapped_column(String)
 
     #Связь с токенами
-    access_tokens: Mapped[list["AccessToken"]] = relationship(back_populates="users", cascade="all, delete-orphan")
+    access_tokens: Mapped[list["AccessToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     refresh_tokens: Mapped[list['RefreshToken']] = relationship(back_populates='user', cascade="all, delete-orphan")
 
 
@@ -38,7 +38,7 @@ class AccessToken(Base):
 
     # Определяет отношение "многие к одному" обратно к модели User.
     # 'back_populates' связывает эту сторону отношения с атрибутом 'access_tokens' в модели Users.
-    users: Mapped[Users] = relationship(back_populates='access_tokens')
+    user: Mapped[Users] = relationship(back_populates='access_tokens')  # для AccessToken
 
     def __repr__(self):
         return (
@@ -77,7 +77,7 @@ class RefreshToken(Base):
     used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Определяет отношение "многие к одному" обратно к модели User.
-    users: Mapped[Users] = relationship(back_populates='refresh_tokens')
+    user: Mapped[Users] = relationship(back_populates='refresh_tokens')
 
     def __repr__(self):
         return (
