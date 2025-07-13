@@ -1,14 +1,19 @@
 import jwt
 import uuid
 
-from typing import Dict
+from typing import Dict, Union
 
 from datetime import datetime, timedelta, timezone
+from jwt import PyJWTError, ExpiredSignatureError, decode
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.util import await_only
 
-from DB.Models.services_init import BaseServiceToken
+from DB.init.base_service_token import BaseServiceToken
 from DB.Models.DB_Models.auth_models import Users, AccessToken, RefreshToken
+
+from DB.utils.token_cheker import token_checker
 
 
 class TokenManager(BaseServiceToken):
@@ -21,7 +26,7 @@ class TokenManager(BaseServiceToken):
             4) Сохраняем данные в БД
         """
         expire = (datetime.now(timezone.utc) + timedelta(minutes=self.settings.ACCESS_TOKEN_EXPIRE_MINUTES)).replace(
-            tzinfo=None)  # Время старта
+            tzinfo=None)  # Время конца
         issued_at = datetime.now(timezone.utc).replace(tzinfo=None)  # Время протухания
 
         payload = {
@@ -105,3 +110,59 @@ class TokenManager(BaseServiceToken):
                 "token": token,
                 "expire": expire
             }
+
+    async def revoke_tokens(self, tokens: tuple):
+        # Препологается, что я буду знать тип токена. Пока не знаю, как я должен это реализовать
+        token_access, token_refresh = tokens
+
+        if await self.access_is_alive(token_access):
+            async with self.session_maker() as session:
+                session: AsyncSession
+
+                stmt = select(AccessToken).where(AccessToken.token == token_access)
+                result = await session.execute(stmt)
+
+                db_token = result.scalar_one_or_none()
+
+                db_token.is_revoked = True
+                user_id = db_token.user_id
+                await session.commit()
+
+                stmt = select(RefreshToken).where(RefreshToken.user_id == user_id)
+                result = await session.execute(stmt)
+
+                db_token = result.scalar_one_or_none()
+                db_token.is_revoked = True
+
+                await session.commit()
+
+                return True
+
+        if await self.refresh_is_alive(token_refresh):
+            async with self.session_maker() as session:
+                session: AsyncSession
+
+                stmt = select(RefreshToken).where(RefreshToken.token == token_refresh)
+                result = await session.execute(stmt)
+
+                db_token = result.scalar_one_or_none()
+                db_token.is_revoked = True
+
+                await session.commit()
+
+                return True
+
+        return False
+
+
+
+
+
+
+    async def access_is_alive(self, token: str) -> bool:
+        async with self.session_maker() as session:
+            return await token_checker(token, session, AccessToken)
+
+    async def refresh_is_alive(self, token: str) -> bool:
+        async with self.session_maker() as session:
+            return await token_checker(token, session, RefreshToken)

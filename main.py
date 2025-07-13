@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from DB.InitModels.InitModels import init_models
 
+from ApiRouters.post.admin.auth import router
 
 
 @asynccontextmanager
@@ -13,3 +14,5 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(router)

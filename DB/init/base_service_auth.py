@@ -1,11 +1,8 @@
-from DB.engine import ORMDatabase
 from DB.Models.cfg.settings import Settings
-
+from DB.engine import ORMDatabase
 
 from DB.Models.services.token_manager import TokenManager
 from DB.Models.services.password_hasher import PasswordService
-
-
 
 
 class BaseServiceAuthDB:
@@ -27,17 +24,3 @@ class BaseServiceAuthDB:
         self.SECRET_KEY = self.settings.SECRET_KEY
 
         print("AuthDBService инициализирован")
-
-
-class BaseServiceToken:
-
-    def __init__(self, settings: Settings):
-
-        self.settings = settings
-        self.db = ORMDatabase(settings.DATABASE_URL)
-        self.session_maker = self.db.get_session
-
-        self.SECRET_KEY = settings.SECRET_KEY
-        self.ALGORITHM = settings.ALGORITHM
-
-        print("TokenManager инициализирован")

@@ -1,10 +1,10 @@
 from sqlalchemy import select
 
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from DB.Models.services_init import BaseServiceAuthDB
+from DB.init.base_service_auth import BaseServiceAuthDB
 from DB.Models.DB_Models.auth_models import Users, AccessToken, RefreshToken
 
 
@@ -47,7 +47,7 @@ class AuthDBService(BaseServiceAuthDB):
                 "refresh_token_expires": refresh["expire"]
             }
 
-    async def authenticate_user(self, login: str, password: str) -> Optional[str, str] | Dict[str]:
+    async def authenticate_user(self, login: str, password: str) -> Union[Dict[str, str], None, bool]:
         """
             ************Аунтефикация и верификация юзера************
             1) Открываем сессию
@@ -70,7 +70,7 @@ class AuthDBService(BaseServiceAuthDB):
             if not self.verify_password(password, user.password): # Проверяем хеш пароль
                 print("Неверный пароль")
 
-                return {"message": "Неверный пароль"}
+                return False
 
             print("Успех: пользователь верифицирован")
             user_id = user.id # Получаем id пользователя
