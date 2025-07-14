@@ -1,18 +1,14 @@
 from fastapi import FastAPI
 
-from contextlib import asynccontextmanager
+from ApiRouters import router
 
-from DB.InitModels.InitModels import init_models
+from fastapi.staticfiles import StaticFiles
 
-from ApiRouters.post.admin.auth import router
+from DB.InitModels.InitModels import lifespan
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_models()
-    yield
 
 
 app = FastAPI(lifespan=lifespan)
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(router)

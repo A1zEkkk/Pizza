@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Вход администратора</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="container">
+    <h2>Авторизация</h2>
+    <form action="/auth_admin" method="post">
+      <input type="text" name="login" placeholder="Логин" required />
+      <input type="password" name="password" placeholder="Пароль" required />
+      <button type="submit">Войти</button>
+    </form>
+
+    <p>Нет аккаунта? <a href="/create_admin">Создать нового админа</a></p>
+  </div>
+</body>
+</html>

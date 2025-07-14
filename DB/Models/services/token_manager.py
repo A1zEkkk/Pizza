@@ -1,23 +1,20 @@
-import jwt
 import uuid
 
-from typing import Dict, Union
+from typing import Dict
 
-from datetime import datetime, timedelta, timezone
-from jwt import PyJWTError, ExpiredSignatureError, decode
+from datetime import datetime
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.util import await_only
 
 from DB.init.base_service_token import BaseServiceToken
 from DB.Models.DB_Models.auth_models import Users, AccessToken, RefreshToken
 
-from DB.utils.token_cheker import token_checker
+from DB.utils import token_checker, add_row, fetch_time_interval, create_token
 
 
 class TokenManager(BaseServiceToken):
-    async def create_access_token(self, user: Users) -> Dict[str, str]:
+    async def create_access_token(self, user: Users) -> Dict[str, datetime]:
         """"
             ****************************Функция для создания Access_token**************************************
             1) Создаем время протухания токена
@@ -25,34 +22,33 @@ class TokenManager(BaseServiceToken):
             3) Открывается сессия и создается объект для добавление в DB AT
             4) Сохраняем данные в БД
         """
-        expire = (datetime.now(timezone.utc) + timedelta(minutes=self.settings.ACCESS_TOKEN_EXPIRE_MINUTES)).replace(
-            tzinfo=None)  # Время конца
-        issued_at = datetime.now(timezone.utc).replace(tzinfo=None)  # Время протухания
+        minutes = self.settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        expire, issued_at = fetch_time_interval(minutes)
 
         payload = {
             "sub": str(user.id),
             "exp": expire,
             "iat": issued_at,
             "jti": str(uuid.uuid4())
-        }  # Данные для управления сессией
+        }
 
-        token = jwt.encode(payload, self.SECRET_KEY, algorithm=self.ALGORITHM)  # JWT токен
+        token =  create_token(payload, self.SECRET_KEY, self.ALGORITHM) # JWT токен
 
         async with self.session_maker() as session:  # Открытие сессии
             session: AsyncSession
 
-            db_token = AccessToken(
+            #Добавление данных в BD
+            await add_row(
+                session,
+                AccessToken,
                 token=token,
                 user_id=user.id,
                 expires_at=expire,
                 issued_at=issued_at,
                 is_revoked=False
-            )  # Access токен
+            )
+            print(f"Refresh token создан для user_id={user.id}")
 
-            session.add(db_token)  # Добавляем наш токен
-            await session.commit()  # Сохраняем изменения
-            await session.refresh(db_token)  # Обновляем изменения
-            print(f"Access token создан для user_id={user.id}")
 
             return {
                 "token": token,
@@ -60,7 +56,7 @@ class TokenManager(BaseServiceToken):
             }
 
 
-    async def create_refresh_token(self, user: Users) -> Dict[str, str]:
+    async def create_refresh_token(self, user: Users) -> Dict[str, datetime]:
         """
             ****************************Функция для создания Refresh_token**************************************
             1) Создаем время протухания токена
@@ -68,13 +64,8 @@ class TokenManager(BaseServiceToken):
             3) Открывается сессия и создается объект для добавление в DB AT
             4) Сохраняем данные в БД
         """
-        expire = (datetime.now(timezone.utc) + timedelta(minutes=self.settings.REFRESH_TOKEN_EXPIRE_MINUTES)).replace(
-            tzinfo=None)  # Cтарт
-        issued_at = datetime.now(timezone.utc).replace(tzinfo=None)  # Время протухания токена
-        # Эта функция из встроенного модуля
-        # Python uuid генерирует универсальный уникальный идентификатор (UUID).
-        # UUID — это 128-битное число, которое гарантированно является уникальным в пространстве и времени.
-        # uuid4() генерирует случайный UUID.
+        minutes = self.settings.REFRESH_TOKEN_EXPIRE_MINUTES
+        expire, issued_at = fetch_time_interval(minutes)
         jti = str(uuid.uuid4())
 
         payload = {
@@ -83,14 +74,16 @@ class TokenManager(BaseServiceToken):
             "iat": issued_at,
             "jti": jti,
             "type": "refresh"
-        }  # Данные для управления сессией
+        }
 
-        token = jwt.encode(payload, self.SECRET_KEY, algorithm=self.ALGORITHM)  # JWT токен
+        token =  create_token(payload, self.SECRET_KEY, algorithm=self.ALGORITHM) # JWT токен
 
         async with self.session_maker() as session:  # Открытие сессии
             session: AsyncSession
 
-            db_token = RefreshToken(
+            await add_row(
+                session,
+                RefreshToken,
                 token=token,
                 user_id=user.id,
                 expires_at=expire,
@@ -98,12 +91,7 @@ class TokenManager(BaseServiceToken):
                 is_revoked=False,
                 jti=jti,
                 used=False
-            )  # Данные которые добавим в DB
-
-            session.add(db_token)  # Добавили в сессию
-            await session.commit()  # Сохранили
-            await session.refresh(db_token)  # Обновили
-
+            )
             print(f"Refresh token создан для user_id={user.id}")
 
             return {
@@ -111,52 +99,39 @@ class TokenManager(BaseServiceToken):
                 "expire": expire
             }
 
-    async def revoke_tokens(self, tokens: tuple):
-        # Препологается, что я буду знать тип токена. Пока не знаю, как я должен это реализовать
+    async def revoke_tokens(self, tokens: tuple[str, str]) -> bool:
+        """Отключает access и все связанные refresh токены пользователя"""
         token_access, token_refresh = tokens
 
-        if await self.access_is_alive(token_access):
-            async with self.session_maker() as session:
-                session: AsyncSession
+        async with self.session_maker() as session:
+            session: AsyncSession
 
-                stmt = select(AccessToken).where(AccessToken.token == token_access)
-                result = await session.execute(stmt)
+            # Отзываем access-токен и получаем user_id
+            stmt_access = (
+                update(AccessToken)
+                .where(AccessToken.token == token_access)
+                .values(is_revoked=True)
+                .returning(AccessToken.user_id)
+            )
+            result = await session.execute(stmt_access)
+            row = result.one_or_none()
 
-                db_token = result.scalar_one_or_none()
+            if row is None:
+                return False
 
-                db_token.is_revoked = True
-                user_id = db_token.user_id
-                await session.commit()
+            user_id = row[0]
+            await session.commit()
 
-                stmt = select(RefreshToken).where(RefreshToken.user_id == user_id)
-                result = await session.execute(stmt)
+            # Отзываем все refresh-токены этого пользователя
+            stmt_refresh = (
+                update(RefreshToken)
+                .where(RefreshToken.user_id == user_id)
+                .values(is_revoked=True)
+            )
+            await session.execute(stmt_refresh)
+            await session.commit()
 
-                db_token = result.scalar_one_or_none()
-                db_token.is_revoked = True
-
-                await session.commit()
-
-                return True
-
-        if await self.refresh_is_alive(token_refresh):
-            async with self.session_maker() as session:
-                session: AsyncSession
-
-                stmt = select(RefreshToken).where(RefreshToken.token == token_refresh)
-                result = await session.execute(stmt)
-
-                db_token = result.scalar_one_or_none()
-                db_token.is_revoked = True
-
-                await session.commit()
-
-                return True
-
-        return False
-
-
-
-
+            return True
 
 
     async def access_is_alive(self, token: str) -> bool:

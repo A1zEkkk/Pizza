@@ -1,14 +1,15 @@
 import fastapi.openapi.utils
-from fastapi import APIRouter, Response, Request,HTTPException
+from fastapi import APIRouter, Response, Request,HTTPException, Form
 from DB.Models.repository.repository import AuthDBService
 from DB.Models.services import TokenManager
+from DB.Models.cfg.settings import Settings
 
 router = APIRouter()
 
 #Нужно реализовать работу с request
 
 @router.post("/create_admin")
-async def create_user(login: str, password: str, response: Response):
+async def create_user(response: Response, login: str = Form(...), password: str = Form(...)):
     bd_service = AuthDBService()
     tokens = await bd_service.create_user(login=login, password=password, role="admin")
 
@@ -32,7 +33,7 @@ async def create_user(login: str, password: str, response: Response):
     return {"message": "Куки были добавлены"}
 
 @router.post("/auth_admin")
-async def auth_user(login: str, password: str, response: Response):
+async def auth_user(response: Response, login: str = Form(...), password: str = Form(...)):
     #Нужно будет доавить фильтр пароля
     bd_service = AuthDBService()
     tokens = await bd_service.authenticate_user(login=login, password=password)
@@ -60,7 +61,7 @@ async def auth_user(login: str, password: str, response: Response):
     return {"message": "Куки были добавлены"}
 
 
-@router.delete("/logout")
+@router.get("/logout") #Нужно будет создать delete
 async def logout(request: Request, response: Response):
     access_token = request.cookies.get("access_token")
     refresh_token = request.cookies.get("refresh_token")
@@ -85,8 +86,18 @@ async def logout(request: Request, response: Response):
 
             return {"detail": "Вы вышли из системы"}
 
+
         raise HTTPException(status_code=400, detail="Ошибка при удалении токенов")
 
+    response.delete_cookie(
+        key="access_token",
+        httponly=True
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        httponly=True
+    )
 
+    return {"message": "was logout" }
 
 

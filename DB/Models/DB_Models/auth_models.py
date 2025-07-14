@@ -27,7 +27,7 @@ class AccessToken(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     token: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
 
     #Время истечения действия токена
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -39,19 +39,6 @@ class AccessToken(Base):
     # Определяет отношение "многие к одному" обратно к модели User.
     # 'back_populates' связывает эту сторону отношения с атрибутом 'access_tokens' в модели Users.
     user: Mapped[Users] = relationship(back_populates='access_tokens')  # для AccessToken
-
-    def __repr__(self):
-        return (
-            f"<AccessToken(id={self.id}, user_id={self.user_id}, "
-            f"expires_at={self.expires_at.strftime('%Y-%m-%d %H:%M:%S')}, "
-            f"revoked={self.is_revoked})>"
-        )
-
-
-    #Метод проверки токена
-    @property
-    def is_expired(self) -> bool:
-        return self.expires_at < datetime.now()
 
 
 class RefreshToken(Base):
@@ -79,14 +66,3 @@ class RefreshToken(Base):
     # Определяет отношение "многие к одному" обратно к модели User.
     user: Mapped[Users] = relationship(back_populates='refresh_tokens')
 
-    def __repr__(self):
-        return (
-            f"<RefreshToken(id={self.id}, user_id={self.user_id}, "
-            f"expires_at={self.expires_at.strftime('%Y-%m-%d %H:%M:%S')}, "  # Форматируем для более чистого вывода
-            f"revoked={self.is_revoked}, used={self.used})>"
-        )
-
-    #Проверка токена
-    @property
-    def is_expired(self) -> bool:
-        return self.expires_at < datetime.now()

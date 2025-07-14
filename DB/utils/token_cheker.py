@@ -1,9 +1,7 @@
-from datetime import datetime, timedelta, timezone
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from DB.Models.DB_Models.auth_models import RefreshToken, AccessToken
+from datetime import datetime, timezone
 
 
 async def token_checker(token: str, session: AsyncSession, model) -> bool:

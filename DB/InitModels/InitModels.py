@@ -1,7 +1,11 @@
+from fastapi import FastAPI
+
 from DB.Models import Base
 from DB.engine import ORMDatabase
-
 from DB.Models.cfg.settings import Settings
+
+from contextlib import asynccontextmanager
+
 
 from DB.Models.DB_Models.auth_models import Users, RefreshToken, AccessToken
 
@@ -15,3 +19,9 @@ async def init_models():
     async with engine.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         print(url_db)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_models()
+    yield

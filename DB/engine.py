@@ -2,8 +2,6 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker, AsyncEngine
 
-from DB.Models.cfg.settings import Settings
-
 
 class ORMDatabase:
     def __init__(self, db_url: str):
