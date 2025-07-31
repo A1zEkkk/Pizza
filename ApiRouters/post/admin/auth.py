@@ -1,5 +1,6 @@
-import fastapi.openapi.utils
-from fastapi import APIRouter, Response, Request,HTTPException, Form
+from DB.utils.data_filter import validate_user_input
+from fastapi import APIRouter, Response, Request,HTTPException, Form, status
+from fastapi.responses import JSONResponse, RedirectResponse
 from DB.Models.repository.repository import AuthDBService
 from DB.Models.services import TokenManager
 from DB.Models.cfg.settings import Settings
@@ -9,7 +10,31 @@ router = APIRouter()
 #Нужно реализовать работу с request
 
 @router.post("/create_admin")
-async def create_user(response: Response, login: str = Form(...), password: str = Form(...)):
+async def create_user(response: Response, request: Request, login: str = Form(...), password: str = Form(...)):
+    token_manager = TokenManager()
+    is_auth = False
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+
+    if token_manager.access_is_alive(access_token):
+        is_auth = True
+    elif token_manager.refresh_is_alive(refresh_token):
+        is_auth = True
+
+    if is_auth:
+        return RedirectResponse(url="/")
+    else:
+        await token_manager.revoke_tokens((access_token, refresh_token))
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
+
+
+    validate = validate_user_input(login, password)
+    if isinstance(validate, list):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"errors": validate}
+        )
     bd_service = AuthDBService()
     tokens = await bd_service.create_user(login=login, password=password, role="admin")
 
@@ -33,8 +58,30 @@ async def create_user(response: Response, login: str = Form(...), password: str 
     return {"message": "Куки были добавлены"}
 
 @router.post("/auth_admin")
-async def auth_user(response: Response, login: str = Form(...), password: str = Form(...)):
-    #Нужно будет доавить фильтр пароля
+async def auth_user(response: Response, request: Request, login: str = Form(...), password: str = Form(...)):
+    token_manager = TokenManager()
+    is_auth = False
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+
+    if token_manager.access_is_alive(access_token):
+        is_auth = True
+    elif token_manager.refresh_is_alive(refresh_token):
+        is_auth = True
+
+    if is_auth:
+        return RedirectResponse(url="/")
+    else:
+        await token_manager.revoke_tokens((access_token, refresh_token))
+        response.delete_cookie("access_token")
+        response.delete_cookie("refresh_token")
+
+    validate = validate_user_input(login, password)
+    if isinstance(validate, list):
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={"errors": validate}
+        )
     bd_service = AuthDBService()
     tokens = await bd_service.authenticate_user(login=login, password=password)
 

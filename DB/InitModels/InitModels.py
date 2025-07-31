@@ -7,7 +7,7 @@ from DB.Models.cfg.settings import Settings
 from contextlib import asynccontextmanager
 
 
-from DB.Models.DB_Models.auth_models import Users, RefreshToken, AccessToken
+from DB.Models import DB_Models
 
 
 

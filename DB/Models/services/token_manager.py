@@ -14,7 +14,7 @@ from DB.utils import token_checker, add_row, fetch_time_interval, create_token
 
 
 class TokenManager(BaseServiceToken):
-    async def create_access_token(self, user: Users) -> Dict[str, datetime]:
+    async def create_access_token(self, user: Users) -> str:
         """"
             ****************************Функция для создания Access_token**************************************
             1) Создаем время протухания токена
@@ -50,13 +50,10 @@ class TokenManager(BaseServiceToken):
             print(f"Refresh token создан для user_id={user.id}")
 
 
-            return {
-                "token": token,
-                "expire": expire
-            }
+            return token
 
 
-    async def create_refresh_token(self, user: Users) -> Dict[str, datetime]:
+    async def create_refresh_token(self, user: Users) -> str:
         """
             ****************************Функция для создания Refresh_token**************************************
             1) Создаем время протухания токена
@@ -94,44 +91,32 @@ class TokenManager(BaseServiceToken):
             )
             print(f"Refresh token создан для user_id={user.id}")
 
-            return {
-                "token": token,
-                "expire": expire
-            }
+            return token
 
-    async def revoke_tokens(self, tokens: tuple[str, str]) -> bool:
+    async def revoke_tokens(self, type_token: str, token: str) -> bool:
         """Отключает access и все связанные refresh токены пользователя"""
-        token_access, token_refresh = tokens
+        if type_token == "access":
+            model = AccessToken
+        else:
+            model = RefreshToken
 
         async with self.session_maker() as session:
             session: AsyncSession
 
-            # Отзываем access-токен и получаем user_id
-            stmt_access = (
-                update(AccessToken)
-                .where(AccessToken.token == token_access)
+            #Отзываем токен
+            stmt_token = (
+                update(model)
+                .where(model.token == token)
                 .values(is_revoked=True)
-                .returning(AccessToken.user_id)
+                .returning(model.user_id)
             )
-            result = await session.execute(stmt_access)
-            row = result.one_or_none()
+            await session.execute(stmt_token)
+            await session.commit()
 
-            if row is None:
+            if stmt_token:
+                return True
+            else:
                 return False
-
-            user_id = row[0]
-            await session.commit()
-
-            # Отзываем все refresh-токены этого пользователя
-            stmt_refresh = (
-                update(RefreshToken)
-                .where(RefreshToken.user_id == user_id)
-                .values(is_revoked=True)
-            )
-            await session.execute(stmt_refresh)
-            await session.commit()
-
-            return True
 
 
     async def access_is_alive(self, token: str) -> bool:
