@@ -8,7 +8,7 @@ from sqlalchemy.sql.sqltypes import String, Integer, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
-class Users(Base):
+class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -38,7 +38,7 @@ class AccessToken(Base):
 
     # Определяет отношение "многие к одному" обратно к модели User.
     # 'back_populates' связывает эту сторону отношения с атрибутом 'access_tokens' в модели Users.
-    user: Mapped[Users] = relationship(back_populates='access_tokens')  # для AccessToken
+    user: Mapped[User] = relationship(back_populates='access_tokens')  # для AccessToken
 
 
 class RefreshToken(Base):
@@ -64,5 +64,5 @@ class RefreshToken(Base):
     used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Определяет отношение "многие к одному" обратно к модели User.
-    user: Mapped[Users] = relationship(back_populates='refresh_tokens')
+    user: Mapped[User] = relationship(back_populates='refresh_tokens')
 

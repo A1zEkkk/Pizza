@@ -7,7 +7,7 @@ from DB.Models.cfg.settings import Settings
 from contextlib import asynccontextmanager
 
 
-from DB.Models import DB_Models
+from DB.Models import DB_models
 
 
 
