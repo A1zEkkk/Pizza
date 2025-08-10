@@ -3,10 +3,11 @@ from abc import ABC, abstractmethod
 from pydantic import BaseModel
 from typing import Generic, Type, TypeVar
 
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import NoResultFound, IntegrityError
 from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy import select, delete, insert, update
 
+from DB.utils.exceptions import DuplicateEntryError
 from DB.Models import Base
 from ....engine import ORMDatabase
 
@@ -28,41 +29,53 @@ class BaseRepository(Generic[ModelType], ABC):
     async def get_by_id(self, id_value: int):
         async with self.orm_database.get_session() as session:
             stmt = select(self.model).where(self.get_pk_column() == id_value)
-            result = await session.execute(stmt).scalar_one_or_none()
+            result = await session.execute(stmt)
+            obj = result.scalar_one_or_none()
 
-            if result is None:
+            if obj is None:
                 raise NoResultFound
 
-            return result
+            return obj
 
     async def create(self, data: BaseModel):
          data_dict = data.model_dump()
          async with self.orm_database.get_session() as session:
-            obj = session.add(self.model(**data_dict))
-            await session.commit()
-            await session.refresh(obj)
-            return obj
+             try:
+                 data = self.model(**data_dict)
+                 session.add(data)
+                 await session.commit()
+                 await session.refresh(data)
+                 return data
 
+             except IntegrityError as e:
+                 await session.rollback()
+                 raise DuplicateEntryError(f"Объект с такими уникальными данными уже существует.") from e
+
+    #Дополнить нужно проверку на существование data
     async def update(self, id_value: int, data: BaseModel):
         async with self.orm_database.get_session() as session:
             stmt = update(self.model).where(self.get_pk_column() == id_value).values(**data.model_dump()).returning(self.model)
             result = await session.execute(stmt)
-            await session.commit()
 
             obj = result.scalar_one_or_none()
             if obj is None:
                 raise NoResultFound
 
-            return result
+            await session.commit()
+
+            return obj
 
     async def delete(self, id_value: int):
         async with self.orm_database.get_session() as session:
-            stmt = delete(self.model).where(self.get_pk_column() == id_value).returning(self.model)
+            stmt = select(self.model).where(self.get_pk_column() == id_value)
             result = await session.execute(stmt)
-            await session.commit()
+            obj_to_delete = result.scalar_one_or_none()
 
-            obj = result.scalar_one_or_none()
-            if obj is None:
+            if obj_to_delete is None:
                 raise NoResultFound
 
-            return obj
+
+            await session.delete(obj_to_delete)
+            await session.commit()
+
+            return obj_to_delete

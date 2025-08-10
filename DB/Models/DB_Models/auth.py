@@ -8,6 +8,7 @@ from sqlalchemy.sql.sqltypes import String, Integer, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -17,52 +18,30 @@ class User(Base):
     login: Mapped[str] = mapped_column(String, unique=True)
     password: Mapped[str] = mapped_column(String)
 
-    #Связь с токенами
-    access_tokens: Mapped[list["AccessToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    refresh_tokens: Mapped[list['RefreshToken']] = relationship(back_populates='user', cascade="all, delete-orphan")
+    refresh_tokens: Mapped[list['RefreshToken']] = relationship(
+        back_populates='user',
+        cascade="all, delete-orphan"
+    )
 
-
-class AccessToken(Base):
-    __tablename__ = "access_tokens"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    token: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-
-    #Время истечения действия токена
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    #Время выдачи токена
-    issued_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
-    #Флаг ручного отзыва токена
-    is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    # Определяет отношение "многие к одному" обратно к модели User.
-    # 'back_populates' связывает эту сторону отношения с атрибутом 'access_tokens' в модели Users.
-    user: Mapped[User] = relationship(back_populates='access_tokens')  # для AccessToken
-
+    def __repr__(self):
+        return f"<User(id={self.id}, login='{self.login}', role='{self.role}', password='{self.password}')>"
 
 class RefreshToken(Base):
     __tablename__ = 'refresh_tokens'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     token: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), nullable=False, index=True)
 
-    #Время истечения жизни рефреш токена
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey('users.id', ondelete="CASCADE"),  # каскадное удаление на уровне БД
+        nullable=False,
+        index=True
+    )
+
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    #Время выдачи рефреш токена
     issued_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
-    # Флаг для ручного отзыва.
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    # JTI (JWT ID): Уникальный идентификатор из полезной нагрузки JWT.
-    # Критически важен для чёрных списков токенов и реализации refresh-токенов "одноразового использования".
     jti: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-
-    # Флаг 'used': Для стратегии refresh-токена "одноразового использования".
-    # Когда refresh-токен используется для выдачи нового access-токена, этот флаг устанавливается в True,
-    # и выдаётся *новый* refresh-токен. Это значительно повышает безопасность против атак повторного воспроизведения.
     used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    # Определяет отношение "многие к одному" обратно к модели User.
     user: Mapped[User] = relationship(back_populates='refresh_tokens')
-
